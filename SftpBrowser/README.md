@@ -7,5 +7,4 @@ To build:
 dotnet publish -c Release
 
 To use: 
-SftpBrowser.exe
 SftpBrowser.exe username@host
