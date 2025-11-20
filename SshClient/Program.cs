@@ -75,12 +75,14 @@ public class Program
 
     static AppConfig LoadConfig(string path)
     {
+        Console.WriteLine("Loading config: " + path);
+
         if (!File.Exists(path))
         {
             var sample = new AppConfig
             {
                 ZeroBaseUrl = "https://zero.company.com",
-                UserKeyPath = "%USERPROFILE%\\.ssh\\id_ed25519",
+                UserKeyPath = "%USERPROFILE%/.ssh/id_ed25519",
                 SshCommand = "ssh",
                 SshCommandArgs = "{user}@{host}",
                 SftpBrowserCommand = "SftpBrowser.exe",
@@ -91,7 +93,7 @@ public class Program
                     {
                         Name = "AppServer",
                         Host = "10.1.10.15",
-                        User = "deployer",
+                        User = "deployer"
                     }
                 ]
             };
@@ -100,19 +102,36 @@ public class Program
             {
                 WriteIndented = true
             });
+
             File.WriteAllText(path, jsonSample);
 
             Console.WriteLine("Config created: " + path);
             Console.WriteLine("Edit the config and restart.");
             Environment.Exit(0);
+
+            return null!; // unreachable, but avoids compiler warnings
         }
-        Console.WriteLine("Loading config: " + path);
-        var json = File.ReadAllText(path);
-        return JsonSerializer.Deserialize<AppConfig>(json, new JsonSerializerOptions
+
+        try
         {
-            PropertyNameCaseInsensitive = true
-        }) ?? new AppConfig();
+            var json = File.ReadAllText(path);
+            return JsonSerializer.Deserialize<AppConfig>(json, new JsonSerializerOptions
+            {
+                PropertyNameCaseInsensitive = true
+            }) ?? new AppConfig();
+        }
+        catch (Exception ex)
+        {
+            Console.ForegroundColor = ConsoleColor.Red;
+            Console.WriteLine("ERROR: Failed to parse sshzero.config.json");
+            Console.WriteLine(ex.Message);
+            Console.ResetColor();
+
+            Environment.Exit(1);
+            return null!;
+        }
     }
+
 
     static async Task HandleServerAsync(AppConfig cfg, ServerEntry srv)
     {

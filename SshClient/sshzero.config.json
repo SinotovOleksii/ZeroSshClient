@@ -1,7 +1,7 @@
 {
   "ZeroBaseUrl": "https://users.zero.pritunl.com",
-  "UserKeyPath": "%USERPROFILE%\\.ssh\\id_ed25519",
-  "SshCommand": "C:\\Program Files\\WezTerm\\wezterm-gui.exe",
+  "UserKeyPath": "%USERPROFILE%/.ssh/id_ed25519",
+  "SshCommand": "C:/Program Files/WezTerm/wezterm-gui.exe",
   "SshCommandArgs": "start -- ssh {user}@{host}",
   "SftpBrowserCommand": "SftpBrowser.exe",
   "SftpBrowserArgs": "{user}@{host}",

@@ -55,6 +55,7 @@ OpenSSH (default):
 Available placeholders:
 {user} — SSH username
 {host} — server hostname or IP
+It's better to install WezTerm to use with linux ssh.
 
 SftpBrowserCommand / SftpBrowserArgs:
 
@@ -97,3 +98,5 @@ id_ed25519
 id_ed25519.pub
 id_ed25519-cert
 id_ed25519-cert.pub
+
+To build: dotnet publish -c Release
