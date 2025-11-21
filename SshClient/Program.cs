@@ -545,7 +545,7 @@ public static class Launcher
             Arguments = args,
             UseShellExecute = true
         };
-
+        Console.WriteLine("Opening SSH...");
         try
         {
             Process.Start(psi);
