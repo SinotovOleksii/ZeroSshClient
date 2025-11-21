@@ -66,7 +66,7 @@ public class MainForm : Form
         _sftpPort = sftpPort;
 
         Text = $"SFTP Browser - {_sftpUser}@{_sftpHost}";
-        Width = 1000;
+        Width = 1200;
         Height = 600;
 
         KeyPreview = true; // для гарячих клавіш F5/F6/F7/F8
@@ -153,8 +153,8 @@ public class MainForm : Form
             }
         };
 
-        lvRemote = CreateListView();
-        lvLocal  = CreateListView();
+        lvRemote = CreateRemoteListView();
+        lvLocal  = CreateLocalListView();
 
         lvRemote.MouseClick += (s, e) => _activeSide = PanelSide.Remote;
         lvLocal.MouseClick  += (s, e) => _activeSide = PanelSide.Local;
@@ -182,7 +182,24 @@ public class MainForm : Form
         Controls.Add(lblStatus);
     }
 
-    private ListView CreateListView()
+    private ListView CreateRemoteListView()
+    {
+        var lv = new ListView
+        {
+            Dock = DockStyle.Fill,
+            View = View.Details,
+            FullRowSelect = true
+        };
+        lv.Columns.Add("Name", 150);
+        lv.Columns.Add("Size", 60);
+        lv.Columns.Add("Owner", 80);
+        lv.Columns.Add("Group", 80);
+        lv.Columns.Add("Date", 100);
+        lv.Columns.Add("Perm", 100);
+        return lv;
+    }
+
+    private ListView CreateLocalListView()
     {
         var lv = new ListView
         {
@@ -248,7 +265,10 @@ public class MainForm : Form
             {
                 var lvi = new ListViewItem(it.Name);
                 lvi.SubItems.Add(it.IsDir ? "" : FormatSize(it.Size));
-                lvi.SubItems.Add(it.IsDir ? "Dir" : "File");
+                lvi.SubItems.Add(it.Owner);
+                lvi.SubItems.Add(it.Group);
+                lvi.SubItems.Add(it.Date);
+                lvi.SubItems.Add(it.Permissions);
                 lvi.Tag = new ItemTag
                 {
                     IsDir = it.IsDir,
@@ -641,43 +661,79 @@ public class MainForm : Form
         }
     }
 
-    private record SftpItem(string Name, bool IsDir, long Size);
+    private record SftpItem(
+        string Name,
+        bool IsDir,
+        long Size,
+        string Permissions,
+        string Owner,
+        string Group,
+        string Date
+    );
 
     private List<SftpItem> ParseSftpLs(string output)
     {
         var list = new List<SftpItem>();
         using var reader = new StringReader(output);
         string? line;
+
         while ((line = reader.ReadLine()) != null)
         {
             line = line.Trim();
             if (line.Length < 10) continue;
+
             char c0 = line[0];
             if (c0 != 'd' && c0 != '-') continue;
 
             var parts = line.Split(' ', StringSplitOptions.RemoveEmptyEntries);
             if (parts.Length < 9) continue;
 
-            bool isDir = parts[0].StartsWith("d", StringComparison.OrdinalIgnoreCase);
+            string perms = parts[0];
+            bool isDir = perms.StartsWith("d", StringComparison.OrdinalIgnoreCase);
+
+            string owner = parts[2];
+            string group = parts[3];
+
             long size = 0;
             long.TryParse(parts[4], out size);
 
-            string name = string.Join(' ', parts.Skip(8));
+            string date = string.Join(' ', parts[5], parts[6], parts[7]);
+
+            string rawName = string.Join(' ', parts.Skip(8)); // може бути "appmgmt" або "/opt/appmgmt"
+
+            string name = rawName.Trim();
+            if (name.StartsWith("/"))
+            {
+                // /opt/appmgmt → appmgmt
+                name = Path.GetFileName(name);
+            }
             if (string.IsNullOrEmpty(name)) continue;
 
-            list.Add(new SftpItem(name, isDir, size));
+            list.Add(new SftpItem(name, isDir, size, perms, owner, group, date));
         }
+
         return list;
     }
+
 
     // ---------------- HELPERS ----------------
 
     private string NormalizeRemotePath(string path)
     {
-        if (string.IsNullOrWhiteSpace(path)) return "/";
-        path = path.Trim();
-        if (!path.StartsWith("/")) path = "/" + path;
-        if (path.Length > 1 && path.EndsWith("/")) path = path.TrimEnd('/');
+        if (string.IsNullOrWhiteSpace(path))
+            return "/";
+
+        path = path.Trim().Replace('\\', '/');
+
+        if (!path.StartsWith("/"))
+            path = "/" + path;
+
+        while (path.Contains("//"))
+            path = path.Replace("//", "/");
+
+        if (path.Length > 1 && path.EndsWith("/"))
+            path = path.TrimEnd('/');
+
         return path;
     }
 
@@ -697,7 +753,15 @@ public class MainForm : Form
     private string CombineRemotePath(string basePath, string name)
     {
         basePath = NormalizeRemotePath(basePath);
-        if (basePath == "/") return "/" + name;
+        if (string.IsNullOrWhiteSpace(name))
+            return basePath;
+
+        if (name.StartsWith("/"))
+            return NormalizeRemotePath(name);
+
+        if (basePath == "/")
+            return "/" + name;
+
         return basePath + "/" + name;
     }
 
