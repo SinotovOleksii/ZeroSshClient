@@ -132,8 +132,15 @@ public class MainForm : Form
         {
             if (e.KeyCode == Keys.Enter)
             {
-                _remotePath = NormalizeRemotePath(txtRemotePath.Text);
-                await RefreshRemoteAsync();
+                try
+                {
+                    _remotePath = NormalizeRemotePath(txtRemotePath.Text);
+                    await RefreshRemoteAsync();
+                }
+                catch (ArgumentException ex)
+                {
+                    ShowStatus($"Invalid remote path: {ex.Message}");
+                }
             }
         };
 
@@ -730,6 +737,9 @@ public class MainForm : Form
 
         path = path.Trim().Replace('\\', '/');
 
+        if (path.Any(char.IsControl))
+            throw new ArgumentException("Path cannot contain control characters.", nameof(path));
+            
         if (!path.StartsWith("/"))
             path = "/" + path;
 
