@@ -150,7 +150,19 @@ public class Program
         var privateKeyPath = SshKeyHelper.Normalize(cfg.UserKeyPath);
         var certPubPath = privateKeyPath + "-cert.pub";
 
-        var certInfo = SshKeyHelper.ParseCertificate(certPubPath);
+        SshCertificateInfo? certInfo;
+        try
+        {
+            certInfo = SshKeyHelper.ParseCertificate(certPubPath);
+        }
+        catch (Exception ex)
+        {
+            Console.ForegroundColor = ConsoleColor.Yellow;
+            Console.WriteLine("Unable to parse SSH certificate.");
+            Console.WriteLine(ex.Message);
+            Console.ResetColor();
+            return false;
+        }
 
         if (certInfo == null)
         {
