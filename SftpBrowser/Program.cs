@@ -61,8 +61,8 @@ public class MainForm : Form
 
     public MainForm(string sftpUser, string sftpHost, int sftpPort = 22)
     {
-        _sftpUser = sftpUser;
-        _sftpHost = sftpHost;
+        _sftpUser = EnsureSshIdentifier(sftpUser, nameof(sftpUser));
+        _sftpHost = EnsureSshIdentifier(sftpHost, nameof(sftpHost));
         _sftpPort = sftpPort;
 
         Text = $"SFTP Browser - {_sftpUser}@{_sftpHost}";
@@ -246,7 +246,7 @@ public class MainForm : Form
             ShowStatus("Listing remote...");
             lvRemote.Items.Clear();
 
-            string batch = $"ls -l \"{_remotePath}\"\n";
+            string batch = $"ls -l {QuoteSftpPath(_remotePath)}\n";
             string output = await RunSftpBatchAsync(batch);
 
             var items = ParseSftpLs(output);
@@ -407,11 +407,11 @@ public class MainForm : Form
         {
             ShowStatus($"Copying from remote: {tag.FullPath}");
             var sb = new StringBuilder();
-            sb.AppendLine($"lcd \"{_localPath}\"");
+            sb.AppendLine($"lcd {QuoteLocalPath(_localPath)}");
             if (tag.IsDir)
-                sb.AppendLine($"get -r \"{tag.FullPath}\"");
+                sb.AppendLine($"get -r {QuoteSftpPath(tag.FullPath)}");
             else
-                sb.AppendLine($"get \"{tag.FullPath}\"");
+                sb.AppendLine($"get {QuoteSftpPath(tag.FullPath)}");
 
             string cmd = sb.ToString();
             await RunSftpBatchAsync(cmd);
@@ -450,11 +450,11 @@ public class MainForm : Form
         {
             ShowStatus($"Copying from local: {tag.FullPath}");
             var sb = new StringBuilder();
-            sb.AppendLine($"cd \"{_remotePath}\"");
+            sb.AppendLine($"cd {QuoteSftpPath(_remotePath)}");
             if (tag.IsDir)
-                sb.AppendLine($"put -r \"{tag.FullPath}\"");
+                sb.AppendLine($"put -r {QuoteLocalPath(tag.FullPath)}");
             else
-                sb.AppendLine($"put \"{tag.FullPath}\"");
+                sb.AppendLine($"put {QuoteLocalPath(tag.FullPath)}");
 
             await RunSftpBatchAsync(sb.ToString());
 
@@ -478,7 +478,7 @@ public class MainForm : Form
             try
             {
                 ShowStatus("Creating remote folder...");
-                string batch = $"mkdir \"{remoteFull}\"\n";
+                string batch = $"mkdir {QuoteSftpPath(remoteFull)}\n";
                 await RunSftpBatchAsync(batch);
                 await RefreshRemoteAsync();
                 ShowStatus("Remote folder created.");
@@ -546,8 +546,8 @@ public class MainForm : Form
                 ShowStatus("Deleting remote...");
 
                 string cmd = tag.IsDir
-                    ? $"rmdir \"{tag.FullPath}\"\n"
-                    : $"rm \"{tag.FullPath}\"\n";
+                    ? $"rmdir {QuoteSftpPath(tag.FullPath)}\n"
+                    : $"rm {QuoteSftpPath(tag.FullPath)}\n";
 
                 await RunSftpBatchAsync(cmd);
                 await RefreshRemoteAsync();
@@ -627,12 +627,17 @@ public class MainForm : Form
             var psi = new ProcessStartInfo
             {
                 FileName = "sftp",
-                Arguments = $"-P {_sftpPort} -b \"{tempFile}\" {_sftpUser}@{_sftpHost}",
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
                 UseShellExecute = false,
                 CreateNoWindow = true
             };
+
+            psi.ArgumentList.Add("-P");
+            psi.ArgumentList.Add(_sftpPort.ToString());
+            psi.ArgumentList.Add("-b");
+            psi.ArgumentList.Add(tempFile);
+            psi.ArgumentList.Add($"{_sftpUser}@{_sftpHost}");
 
             using var proc = new Process { StartInfo = psi };
             proc.Start();
@@ -763,6 +768,45 @@ public class MainForm : Form
             return "/" + name;
 
         return basePath + "/" + name;
+    }
+
+    private static string QuoteSftpPath(string path)
+    {
+        if (path == null)
+            throw new ArgumentNullException(nameof(path));
+
+        if (path.IndexOfAny(new[] { '\r', '\n' }) >= 0)
+            throw new ArgumentException("Path cannot contain newline characters.", nameof(path));
+
+        string normalized = path.Replace("\\", "/");
+        string escaped = normalized.Replace("\"", "\\\"");
+        return $"\"{escaped}\"";
+    }
+
+    private static string QuoteLocalPath(string path)
+    {
+        if (path == null)
+            throw new ArgumentNullException(nameof(path));
+
+        if (path.IndexOfAny(new[] { '\r', '\n' }) >= 0)
+            throw new ArgumentException("Path cannot contain newline characters.", nameof(path));
+
+        string escaped = path.Replace("\"", "\\\"");
+        return $"\"{escaped}\"";
+    }
+
+    private static string EnsureSshIdentifier(string value, string paramName)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            throw new ArgumentException("Value cannot be empty.", paramName);
+
+        foreach (char ch in value)
+        {
+            if (char.IsWhiteSpace(ch) || char.IsControl(ch))
+                throw new ArgumentException("Value cannot contain whitespace or control characters.", paramName);
+        }
+
+        return value;
     }
 
     private string GetParentRemotePath(string path)
